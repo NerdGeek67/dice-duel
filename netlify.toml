@@ -1,0 +1,12 @@
+[build]
+  publish = "www"
+  command = "echo 'Static site - no build needed'"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[dev]
+  publish = "www"
+  command = "python3 -m http.server 8000"

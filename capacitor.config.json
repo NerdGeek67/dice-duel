@@ -1,0 +1,8 @@
+{
+  "appId": "com.nerdgeek.diceduel",
+  "appName": "Dice Duel",
+  "webDir": "www",
+  "server": {
+    "iosScheme": "https"
+  }
+}

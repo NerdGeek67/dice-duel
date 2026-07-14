@@ -50,6 +50,8 @@
   .btn-ghost:hover{box-shadow:inset 0 0 0 1.5px var(--cyan),0 0 22px rgba(0,240,255,.4);}
   .btn-scan{background:var(--magenta);box-shadow:0 0 22px rgba(255,45,155,.5);}
   .btn-scan:hover{box-shadow:0 0 34px rgba(255,45,155,.8);}
+  .btn-dungeon{background:linear-gradient(180deg,#a061ff,#6a2fd0);color:#fff;box-shadow:0 0 22px rgba(140,80,255,.5);}
+  .btn-dungeon:hover{box-shadow:0 0 34px rgba(140,80,255,.85);}
   .mini{font-size:11px;letter-spacing:2px;padding:10px 22px;}
 
   /* roster */
@@ -301,6 +303,7 @@
     <div class="roster" id="roster"></div>
     <div class="btn-row">
       <button id="startBattle" disabled>FIGHT</button>
+      <button class="btn-dungeon" id="goDungeon">🏰 ENTER DUNGEON</button>
       <button class="btn-scan" id="goScan">📷 SCAN NEW FIGHTER</button>
     </div>
   </div>
@@ -432,6 +435,47 @@
       <button id="shopBack" class="btn-ghost">BACK</button>
     </div>
   </div>
+
+  <!-- DUNGEON LOBBY -->
+  <div class="screen hidden" id="dungeonScreen">
+    <h1 style="font-size:38px;margin-bottom:8px">🏰 DUNGEON</h1>
+    <div class="tag">descend · survive · loot</div>
+    <div class="how" style="max-width:320px;margin-bottom:6px">
+      Fight <b>10 floors</b> of rising danger. Your <span class="g">HP carries</span> between floors — heal a little after each win. <b>Bosses</b> lurk every 5th floor. Bank your loot and leave anytime, or push deeper for bigger rewards. Lose, and you keep only what you banked.
+    </div>
+    <div class="tag" id="dungeonBest" style="color:var(--elec)">Best: Floor 0 / 10</div>
+    <div class="roster" id="dungeonRoster"></div>
+    <div class="btn-row">
+      <button id="dungeonStart" disabled>⬇ DESCEND</button>
+      <button id="dungeonBack" class="btn-ghost mini">BACK</button>
+    </div>
+  </div>
+
+  <!-- FLOOR CLEAR -->
+  <div class="screen hidden" id="floorClearScreen">
+    <div class="final-emoji" style="filter:drop-shadow(0 0 18px var(--elec))">⚔️</div>
+    <div class="result-big win" id="fcFloor" style="font-size:30px">FLOOR CLEARED</div>
+    <div style="max-width:320px;width:100%;margin:18px auto;background:var(--panel);border:2px solid #1d1d38;border-radius:12px;padding:20px;text-align:center;">
+      <div style="font-family:'Orbitron',sans-serif;font-size:20px;color:var(--elec);letter-spacing:1px;" id="fcReward">+0💰 +0✨</div>
+      <div style="font-size:13px;color:var(--good);margin-top:8px;font-family:'Orbitron',sans-serif;" id="fcHP">HP 0/0</div>
+      <div style="font-size:11px;color:#8890c0;margin-top:12px;line-height:1.6;" id="fcTotals"></div>
+    </div>
+    <div class="btn-row">
+      <button id="fcContinue">⬇ DESCEND DEEPER</button>
+      <button id="fcBank" class="btn-ghost mini">💰 BANK LOOT & LEAVE</button>
+    </div>
+  </div>
+
+  <!-- DUNGEON SUMMARY -->
+  <div class="screen hidden" id="dungeonEndScreen">
+    <div class="final-emoji" id="dsEmoji">👑</div>
+    <div class="result-big win" id="dsTitle">DUNGEON CLEARED!</div>
+    <div class="tag" id="dsSub" style="margin-top:14px"></div>
+    <div class="btn-row" style="margin-top:22px">
+      <button id="dsAgain">🏰 RUN AGAIN</button>
+      <button id="dsExit" class="btn-ghost mini">BACK TO ARENA</button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -520,9 +564,10 @@ let youUltCharge=0, foeBurnTurns=0, foeBurnDmg=0, youBoostTurns=0;
 let lastScanned=null, stream=null;
 
 /* ---------- progression system ---------- */
-let player={coins:100,level:1,xp:0,totalXP:0};
+let gameMode='normal'; // 'normal' | 'dungeon' | 'pvp'
+let player={coins:100,level:1,xp:0,totalXP:0,bestFloor:0};
 const LEVEL_UP_XP=500; // XP needed per level
-function loadProgress(){ const saved=localStorage.getItem('dd_player'); if(saved) player=JSON.parse(saved); }
+function loadProgress(){ const saved=localStorage.getItem('dd_player'); if(saved){ player=Object.assign({coins:100,level:1,xp:0,totalXP:0,bestFloor:0},JSON.parse(saved)); } }
 function saveProgress(){ localStorage.setItem('dd_player',JSON.stringify(player)); }
 loadProgress();
 
@@ -545,6 +590,21 @@ $('#goFight').onclick=()=>{ renderRoster(); show('#pickScreen'); };
 $('#goShop').onclick=()=>{ renderShop(); show('#shopScreen'); };
 $('#shopBack').onclick=()=>{ renderProfile(); show('#homeScreen'); };
 $('#startProfile').onclick=()=>{ renderProfile(); show('#homeScreen'); };
+
+/* dungeon navigation */
+$('#goDungeon').onclick=()=>{ renderDungeonLobby(); show('#dungeonScreen'); };
+$('#dungeonBack').onclick=()=>{ renderRoster(); show('#pickScreen'); };
+$('#dungeonStart').onclick=()=>{ if(dungeonPick) startDungeon(dungeonPick); };
+$('#fcContinue').onclick=()=>{ dungeon.floor++; beginDungeonFloor(); };
+$('#fcBank').onclick=()=>{
+  grantRewards(dungeon.coins,dungeon.xp);
+  if(dungeon.floor>(player.bestFloor||0)) player.bestFloor=dungeon.floor;
+  saveProgress(); saveUpgrades();
+  gameMode='normal'; dungeon.active=false;
+  showDungeonSummary('banked',dungeon.floor);
+};
+$('#dsAgain').onclick=()=>{ renderDungeonLobby(); show('#dungeonScreen'); };
+$('#dsExit').onclick=()=>{ renderRoster(); show('#pickScreen'); };
 
 function renderProfile(){
   $('#profileLevel').textContent=player.level;
@@ -793,15 +853,10 @@ function buildEnemy(){
   const base=pool.length?pool[Math.floor(Math.random()*pool.length)]:ROSTER[0];
   return JSON.parse(JSON.stringify(base));
 }
-function beginBattle(chosen){
-  you=JSON.parse(JSON.stringify(chosen)); foe=buildEnemy();
-
-  // apply upgrades to player fighter
-  const playerUpg=getUpgrades(you.id);
-  you.atk*=getAtkMult(you.id);
-  you.maxhp=getMaxHP(you.maxhp,you.id);
-
-  youHP=you.maxhp; foeHP=foe.maxhp; youShield=0; foeShield=0;
+/* shared battle setup — assumes you/foe/youHP/foeHP are already set by the caller.
+   Resets per-battle transient state so HP can be carried across dungeon floors. */
+function enterBattle(introMsg){
+  youShield=0; foeShield=0;
   youWeaken=0; foeWeaken=0; foeStun=false; turn='you'; currentRoll=null; busy=false;
   youUltCharge=0; foeBurnTurns=0; foeBurnDmg=0; youBoostTurns=0;
   if(!you.ult) you.ult=JSON.parse(JSON.stringify(DEFAULT_ULTS[you.el]||DEFAULT_ULTS.nature));
@@ -810,7 +865,122 @@ function beginBattle(chosen){
   buildSkills(); updateHP(); updateShields(); $('#rollReadout').innerHTML='';
   battleLog=[]; $('#rulesOv').classList.add('hidden'); $('#logOv').classList.add('hidden');
   const sc=$('#bxScroll'); if(sc) sc.scrollTop=0;
-  setTurn('you'); log(`A wild ${foe.name} appears!`);
+  setTurn('you'); log(introMsg);
+}
+function beginBattle(chosen){
+  gameMode='normal';
+  you=JSON.parse(JSON.stringify(chosen)); foe=buildEnemy();
+  // apply upgrades to player fighter
+  you.atk*=getAtkMult(you.id);
+  you.maxhp=getMaxHP(you.maxhp,you.id);
+  youHP=you.maxhp; foeHP=foe.maxhp;
+  enterBattle(`A wild ${foe.name} appears!`);
+}
+
+/* ================= DUNGEON ================= */
+const DUNGEON_FLOORS=10;
+let dungeon={active:false,floor:1,coins:0,xp:0};
+let dungeonPick=null;
+
+function grantRewards(coins,xp){ // single place that banks dungeon loot + levels up
+  player.coins+=coins; player.totalXP+=xp; player.xp+=xp;
+  while(player.xp>=LEVEL_UP_XP){ player.xp-=LEVEL_UP_XP; player.level++; }
+}
+function isBossFloor(f){ return f%5===0; }
+
+function renderDungeonLobby(){
+  dungeonPick=null; $('#dungeonStart').disabled=true;
+  $('#dungeonBest').textContent='Best: Floor '+(player.bestFloor||0)+' / '+DUNGEON_FLOORS;
+  const wrap=$('#dungeonRoster'); wrap.innerHTML='';
+  ROSTER.forEach(m=>{
+    const c=EL_COLOR[m.el]||'#00f0ff', cg=elGlow(m.el);
+    const el=document.createElement('div'); el.className='mon-card';
+    el.style.setProperty('--c',c); el.style.setProperty('--cg',cg);
+    const hpBoosted=getMaxHP(m.maxhp,m.id);
+    el.innerHTML=`<div class="mon-emoji">${m.emoji}</div>
+      <div class="mon-name">${m.name}</div><div class="mon-el">${m.el}</div>
+      <div class="mon-stats">HP ${hpBoosted} · PWR ${(m.atk*getAtkMult(m.id)).toFixed(2)}×</div>`;
+    el.onclick=()=>{ dungeonPick=m; document.querySelectorAll('#dungeonRoster .mon-card').forEach(x=>x.classList.remove('sel'));
+      el.classList.add('sel'); $('#dungeonStart').disabled=false; };
+    wrap.appendChild(el);
+  });
+}
+
+function startDungeon(chosen){
+  gameMode='dungeon';
+  dungeon={active:true,floor:1,coins:0,xp:0};
+  you=JSON.parse(JSON.stringify(chosen));
+  you.atk*=getAtkMult(you.id);
+  you.maxhp=getMaxHP(you.maxhp,you.id);
+  youHP=you.maxhp;
+  beginDungeonFloor();
+}
+
+function buildDungeonEnemy(floor){
+  const pool=ROSTER.filter(m=>m.id!==you.id);
+  const base=JSON.parse(JSON.stringify(pool.length?pool[Math.floor(Math.random()*pool.length)]:ROSTER[0]));
+  const boss=isBossFloor(floor);
+  const hpMult=(1+(floor-1)*0.15)*(boss?1.6:1);
+  const atkMult=(1+(floor-1)*0.08)*(boss?1.25:1);
+  base.maxhp=Math.round(base.maxhp*hpMult);
+  base.atk=Math.round(base.atk*atkMult*100)/100;
+  if(boss) base.name='☠ '+base.name.slice(0,14);
+  base._boss=boss;
+  return base;
+}
+
+function beginDungeonFloor(){
+  foe=buildDungeonEnemy(dungeon.floor);
+  foeHP=foe.maxhp;
+  const boss=foe._boss;
+  enterBattle(boss?`⚠ BOSS! ${foe.name} guards Floor ${dungeon.floor}!`:`Floor ${dungeon.floor} — ${foe.name} appears!`);
+}
+
+function endDungeonBattle(won){
+  if(!won){ // died — FORFEIT unbanked loot (you keep only what you banked = nothing this run)
+    const cleared=dungeon.floor-1;
+    if(cleared>(player.bestFloor||0)){ player.bestFloor=cleared; saveProgress(); }
+    gameMode='normal'; dungeon.active=false;
+    return showDungeonSummary('dead',cleared);
+  }
+  // floor cleared → award, then complete or interstitial
+  const boss=foe._boss;
+  const coinR=Math.round((30+dungeon.floor*10)*(boss?2.5:1));
+  const xpR=Math.round((40+dungeon.floor*15)*(boss?2:1));
+  dungeon.coins+=coinR; dungeon.xp+=xpR;
+  if(dungeon.floor>=DUNGEON_FLOORS){ // conquered the whole dungeon
+    grantRewards(dungeon.coins,dungeon.xp);
+    player.bestFloor=DUNGEON_FLOORS;
+    saveProgress(); saveUpgrades();
+    gameMode='normal'; dungeon.active=false;
+    return showDungeonSummary('win',DUNGEON_FLOORS);
+  }
+  const heal=Math.round(you.maxhp*0.25);
+  youHP=Math.min(you.maxhp,youHP+heal);
+  showFloorClear(coinR,xpR,heal);
+}
+
+function showFloorClear(coinR,xpR,heal){
+  haptic('success');
+  $('#fcFloor').textContent='FLOOR '+dungeon.floor+' CLEARED';
+  $('#fcReward').innerHTML=`+${coinR}💰  +${xpR}✨  +${heal}❤️`;
+  $('#fcHP').textContent=`HP ${Math.round(youHP)} / ${you.maxhp}`;
+  const nf=dungeon.floor+1;
+  $('#fcTotals').innerHTML=`Run loot so far: ${dungeon.coins}💰 · ${dungeon.xp}✨<br>Next: Floor ${nf} ${isBossFloor(nf)?'· ☠ BOSS':''}`;
+  show('#floorClearScreen');
+}
+
+function showDungeonSummary(result,cleared){
+  const emoji=result==='win'?'👑':result==='banked'?'💰':'💀';
+  const title=result==='win'?'DUNGEON CLEARED!':result==='banked'?'ESCAPED SAFELY':'YOU FELL';
+  $('#dsEmoji').textContent=emoji;
+  const t=$('#dsTitle'); t.textContent=title; t.className='result-big '+(result==='dead'?'lose':'win');
+  const lootLine=result==='dead'
+    ? `<div style="color:#ff6a6a">Forfeited ${dungeon.coins}💰 ${dungeon.xp}✨ — unbanked!</div>`
+    : `<div>Looted +${dungeon.coins}💰 +${dungeon.xp}✨</div>`;
+  $('#dsSub').innerHTML=`<div>Reached Floor ${Math.max(0,cleared)} / ${DUNGEON_FLOORS}</div>`+
+    lootLine+`<div style="color:var(--elec)">Best: Floor ${player.bestFloor||0}</div>`;
+  show('#dungeonEndScreen');
 }
 function renderFighter(sel,m,enemy){
   const box=$(sel), c=EL_COLOR[m.el]||'#00f0ff', cg=elGlow(m.el);
@@ -1204,6 +1374,7 @@ requestAnimationFrame(fxLoop);
 function endGame(won){
   $('#battle').style.transform='';
   $('#rulesOv').classList.add('hidden'); $('#logOv').classList.add('hidden');
+  if(gameMode==='dungeon') return endDungeonBattle(won);
   const coinReward=won?50:15, xpReward=won?100:40;
   player.coins+=coinReward; player.totalXP+=xpReward; player.xp+=xpReward;
 

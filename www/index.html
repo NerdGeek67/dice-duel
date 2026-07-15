@@ -529,7 +529,7 @@ const DEFAULT_ULTS={
   fire:{name:'INFERNO OVERDRIVE',ico:'☄️',type:'burn',cost:20,desc:'Big hit + burns foe 3 turns.'},
   water:{name:'ABYSSAL BULWARK',ico:'🌊',type:'bigshield',cost:20,desc:'Huge shield + heal.'},
   elec:{name:'GIGAVOLT BREAKER',ico:'🌩️',type:'nuke',cost:20,desc:'Colossal one-hit damage.'},
-  nature:{name:'WILD INSTINCT',ico:'🍀',type:'diceboost',cost:20,desc:'+1 per die for 3 rolls.'},
+  nature:{name:'WILD INSTINCT',ico:'🍀',type:'diceboost',cost:20,desc:'+2 per die for 3 rolls.'},
 };
 
 /* ---------- starter roster ---------- */
@@ -548,7 +548,7 @@ let ROSTER=[
     skills:[{name:'SPARK STRIKE',ico:'⚡',type:'dmg',mult:1.15,min:0,desc:'Quick shock.'},
             {name:'THUNDER STRIKE',ico:'🌩️',type:'dmg',mult:2.1,min:8,crit:true,desc:'Devastating bolt. Needs ≥8.'},
             {name:'STATIC VEIL',ico:'✨',type:'shield',mult:1.3,stun:true,min:0,desc:'Shield + may stun foe.'}],
-    ult:{name:'OVERCLOCK',ico:'⚡',type:'diceboost',cost:20,desc:'+1 per die for 3 rolls.'}},
+    ult:{name:'OVERCLOCK',ico:'⚡',type:'diceboost',cost:20,desc:'+2 per die for 3 rolls.'}},
   {id:'blazemane',name:'BLAZEMANE',el:'fire',emoji:'🦁',atk:1.3,maxhp:105,scanned:false,
     skills:[{name:'SAVANNA SLASH',ico:'🔥',type:'dmg',mult:1.1,min:0,desc:'Burning claw swipe.'},
             {name:'ROARING FLARE',ico:'☄️',type:'dmg',mult:1.9,min:7,crit:true,desc:'Blazing roar. Needs ≥7.'},
@@ -568,7 +568,7 @@ let ROSTER=[
     skills:[{name:'FANG STRIKE',ico:'💥',type:'dmg',mult:1.15,min:0,desc:'Lightning-fast bite.'},
             {name:'VENOM SPIRAL',ico:'🌀',type:'dmg',mult:1.5,weaken:true,min:5,desc:'Poison + saps foe roll. ≥5.'},
             {name:'SCALE COIL',ico:'✨',type:'shield',mult:1.3,stun:true,min:0,desc:'Coil up + may stun foe.'}],
-    ult:{name:'SERPENT EYE',ico:'👁️',type:'diceboost',cost:20,desc:'+1 per die for 3 rolls.'}},
+    ult:{name:'SERPENT EYE',ico:'👁️',type:'diceboost',cost:20,desc:'+2 per die for 3 rolls.'}},
 ];
 
 /* ---------- state ---------- */
@@ -1167,28 +1167,28 @@ function ultAction(){
   const critMul=roll.crit?1.3:1;
   log(`${you.name} unleashes ${u.name}!`);
   if(u.type==='nuke'){
-    const dmg=Math.round((18+roll.total*2.4)*you.atk*elMult(you.el,foe.el)*critMul);
+    const dmg=Math.round((30+roll.total*3.4)*you.atk*elMult(you.el,foe.el)*critMul);
     attackAnim('#youBox','#enemyBox',u.ico,EL_COLOR[you.el],true,()=>{
       shake(14); applyToFoe(dmg,true,u);
       if(foeHP<=0) return setTimeout(()=>endGame(true),700);
       setTimeout(enemyTurn,950);
     });
   } else if(u.type==='burn'){
-    const dmg=Math.round((8+roll.total*1.3)*you.atk*elMult(you.el,foe.el)*critMul);
+    const dmg=Math.round((14+roll.total*2.0)*you.atk*elMult(you.el,foe.el)*critMul);
     attackAnim('#youBox','#enemyBox',u.ico,EL_COLOR[you.el],true,()=>{
-      applyToFoe(dmg,true,u); foeBurnTurns=3; foeBurnDmg=Math.round(5+you.atk*4);
+      applyToFoe(dmg,true,u); foeBurnTurns=3; foeBurnDmg=Math.round(8+you.atk*6);
       floatText('#enemyBox','🔥 BURNING','#ff5a3c');
       if(foeHP<=0) return setTimeout(()=>endGame(true),700);
       setTimeout(enemyTurn,950);
     });
   } else if(u.type==='bigshield'){
-    const sh=Math.round((25+roll.total*2)*critMul); youShield+=sh; youHP=Math.min(you.maxhp,youHP+10);
+    const sh=Math.round((40+roll.total*3)*critMul), heal=20; youShield+=sh; youHP=Math.min(you.maxhp,youHP+heal);
     updateShields(); updateHP(); burst2('#youBox',EL_COLOR[you.el],26); shake(8); haptic('success');
-    floatText('#youBox','+'+sh+'🛡','#2db8ff'); log(`${u.name}! +${sh} shield & +10 HP.`);
+    floatText('#youBox','+'+sh+'🛡','#2db8ff'); log(`${u.name}! +${sh} shield & +${heal} HP.`);
     setTimeout(enemyTurn,950);
   } else { // diceboost
     youBoostTurns=3; burst2('#youBox','#ffd23f',22); haptic('success');
-    floatText('#youBox','🎲 +1 ×3','#ffd23f'); log(`${u.name}! +1 per die for your next 3 rolls.`);
+    floatText('#youBox','🎲 +2 ×3','#ffd23f'); log(`${u.name}! +2 per die for your next 3 rolls.`);
     setTimeout(enemyTurn,950);
   }
 }
@@ -1282,7 +1282,7 @@ function rollDice(power,up,bias=0,perfect=false){
   let v1=rollDie(bias), v2=rollDie(bias);
   if(perfect&&v1!==v2&&Math.random()<0.35) v2=v1; // perfect timing: 35% forced double
   let boosted=false;
-  if(youBoostTurns>0){ youBoostTurns--; v1=Math.min(6,v1+1); v2=Math.min(6,v2+1); boosted=true; } // ult dice boost
+  if(youBoostTurns>0){ youBoostTurns--; v1=Math.min(6,v1+2); v2=Math.min(6,v2+2); boosted=true; } // ult dice boost
   const isDouble=v1===v2;
   currentRoll={v1,v2,total:v1+v2,crit:isDouble,boosted};
   const dur=reduce?180:(920+power*160), th=tray.clientHeight, hops=2;

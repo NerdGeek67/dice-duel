@@ -419,7 +419,8 @@
     </div>
     <div class="btn-row" style="margin-top:26px;">
       <button id="goFight">BACK TO ARENA</button>
-      <button class="btn-ghost mini" id="goShop">🏪 SHOP</button>
+      <button class="btn-ghost mini" id="goShop">🏪 UPGRADE SHOP</button>
+      <button class="btn-ghost mini" id="goItems">🎒 GEAR SHOP</button>
     </div>
   </div>
 
@@ -433,6 +434,19 @@
     <div style="max-width:420px;width:100%;margin:0 auto;" id="shopRoster"></div>
     <div class="btn-row">
       <button id="shopBack" class="btn-ghost">BACK</button>
+    </div>
+  </div>
+
+  <!-- GEAR SHOP -->
+  <div class="screen hidden" id="itemShopScreen">
+    <h1 style="font-size:34px;margin-bottom:8px">🎒 GEAR SHOP</h1>
+    <div class="tag">buy · equip · gear up</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;max-width:340px;width:100%;margin:0 auto 16px;padding:0 6px;">
+      <div style="font-size:12px;color:#8890c0;letter-spacing:2px;">Lv<span id="itemsLevel" style="color:var(--cyan);font-weight:900;">1</span> · 💰 <span id="itemsCoins" style="color:var(--elec);font-weight:900;font-size:14px;">100</span></div>
+    </div>
+    <div style="max-width:420px;width:100%;margin:0 auto;" id="itemShopWrap"></div>
+    <div class="btn-row">
+      <button id="itemsBack" class="btn-ghost">BACK</button>
     </div>
   </div>
 
@@ -565,11 +579,30 @@ let lastScanned=null, stream=null;
 
 /* ---------- progression system ---------- */
 let gameMode='normal'; // 'normal' | 'dungeon' | 'pvp'
-let player={coins:100,level:1,xp:0,totalXP:0,bestFloor:0};
-const LEVEL_UP_XP=500; // XP needed per level
-function loadProgress(){ const saved=localStorage.getItem('dd_player'); if(saved){ player=Object.assign({coins:100,level:1,xp:0,totalXP:0,bestFloor:0},JSON.parse(saved)); } }
+const PLAYER_DEFAULT={coins:100,level:1,xp:0,totalXP:0,bestFloor:0,inventory:{owned:[],equipped:{weapon:null,armor:null,trinket:null}}};
+let player=JSON.parse(JSON.stringify(PLAYER_DEFAULT));
+function xpForLevel(lvl){ return 500+(lvl-1)*150; } // rising curve — each level asks for more
+function loadProgress(){
+  const saved=localStorage.getItem('dd_player');
+  if(saved){ player=Object.assign(JSON.parse(JSON.stringify(PLAYER_DEFAULT)),JSON.parse(saved)); }
+  if(!player.inventory) player.inventory={owned:[],equipped:{weapon:null,armor:null,trinket:null}};
+}
 function saveProgress(){ localStorage.setItem('dd_player',JSON.stringify(player)); }
 loadProgress();
+
+/* applyXP — the one place XP turns into levels. Handles multi-level jumps,
+   per-level coin bonus, and surfaces newly-unlocked gear for the caller to show. */
+function applyXP(xp){
+  player.totalXP+=xp; player.xp+=xp;
+  let levelsGained=0, bonusCoins=0, unlocked=[];
+  while(player.xp>=xpForLevel(player.level)){
+    player.xp-=xpForLevel(player.level);
+    player.level++; levelsGained++;
+    const bonus=25*player.level; bonusCoins+=bonus; player.coins+=bonus;
+    ITEM_CATALOG.forEach(it=>{ if(it.reqLevel===player.level) unlocked.push(it.name); });
+  }
+  return {leveledUp:levelsGained>0,levelsGained,newLevel:player.level,bonusCoins,unlocked};
+}
 
 /* fighter upgrades: stored as upgrades[fighterId]={atkLevel:0, skillsUnlocked:[]} */
 let upgrades={};
@@ -581,6 +614,20 @@ function getUpgrades(id){ if(!upgrades[id]) upgrades[id]={atkLevel:0,skillsUnloc
 function getAtkMult(id){ return 1+(getUpgrades(id).atkLevel||0)*0.05; } // each level +5% attack
 function getMaxHP(base,id){ return Math.round(base*(1+(getUpgrades(id).atkLevel||0)*0.03)); } // each level +3% HP
 
+/* ---------- gear shop: account-wide equipment (weapon/armor/trinket), gated by player level ---------- */
+const ITEM_CATALOG=[
+  {id:'wpn_iron',slot:'weapon',name:'IRON BLADE',icon:'🗡️',cost:80,reqLevel:1,atkBonus:0.05,desc:'+5% ATK'},
+  {id:'wpn_steel',slot:'weapon',name:'STEEL FANG',icon:'⚔️',cost:220,reqLevel:3,atkBonus:0.12,desc:'+12% ATK'},
+  {id:'wpn_dragon',slot:'weapon',name:'DRAGON FANG',icon:'🐲',cost:500,reqLevel:6,atkBonus:0.22,desc:'+22% ATK'},
+  {id:'arm_leather',slot:'armor',name:'LEATHER VEST',icon:'🦺',cost:80,reqLevel:1,hpBonus:0.06,desc:'+6% HP'},
+  {id:'arm_chain',slot:'armor',name:'CHAINMAIL',icon:'🛡️',cost:220,reqLevel:3,hpBonus:0.14,desc:'+14% HP'},
+  {id:'arm_dragon',slot:'armor',name:'DRAGONHIDE',icon:'🐉',cost:500,reqLevel:6,hpBonus:0.25,desc:'+25% HP'},
+  {id:'trk_spark',slot:'trinket',name:'SPARK CHARM',icon:'✨',cost:150,reqLevel:2,ultStart:8,desc:'Start +8⚡ ult charge'},
+  {id:'trk_core',slot:'trinket',name:'OVERCLOCK CORE',icon:'🔮',cost:380,reqLevel:5,ultStart:18,desc:'Start +18⚡ ult charge'},
+];
+function getEquippedItem(slot){ const id=player.inventory.equipped[slot]; return id?ITEM_CATALOG.find(i=>i.id===id):null; }
+function ownsItem(id){ return player.inventory.owned.includes(id); }
+
 /* ---------- navigation ---------- */
 function show(id){ document.querySelectorAll('.screen,#battle').forEach(s=>s.classList.add('hidden')); $(id).classList.remove('hidden'); }
 $('#toRoster').onclick=()=>{ renderRoster(); show('#pickScreen'); };
@@ -590,6 +637,8 @@ $('#goFight').onclick=()=>{ renderRoster(); show('#pickScreen'); };
 $('#goShop').onclick=()=>{ renderShop(); show('#shopScreen'); };
 $('#shopBack').onclick=()=>{ renderProfile(); show('#homeScreen'); };
 $('#startProfile').onclick=()=>{ renderProfile(); show('#homeScreen'); };
+$('#goItems').onclick=()=>{ renderItemShop(); show('#itemShopScreen'); };
+$('#itemsBack').onclick=()=>{ renderProfile(); show('#homeScreen'); };
 
 /* dungeon navigation */
 $('#goDungeon').onclick=()=>{ renderDungeonLobby(); show('#dungeonScreen'); };
@@ -597,11 +646,11 @@ $('#dungeonBack').onclick=()=>{ renderRoster(); show('#pickScreen'); };
 $('#dungeonStart').onclick=()=>{ if(dungeonPick) startDungeon(dungeonPick); };
 $('#fcContinue').onclick=()=>{ dungeon.floor++; beginDungeonFloor(); };
 $('#fcBank').onclick=()=>{
-  grantRewards(dungeon.coins,dungeon.xp);
+  const lv=grantRewards(dungeon.coins,dungeon.xp);
   if(dungeon.floor>(player.bestFloor||0)) player.bestFloor=dungeon.floor;
   saveProgress(); saveUpgrades();
   gameMode='normal'; dungeon.active=false;
-  showDungeonSummary('banked',dungeon.floor);
+  showDungeonSummary('banked',dungeon.floor,lv);
 };
 $('#dsAgain').onclick=()=>{ renderDungeonLobby(); show('#dungeonScreen'); };
 $('#dsExit').onclick=()=>{ renderRoster(); show('#pickScreen'); };
@@ -609,9 +658,9 @@ $('#dsExit').onclick=()=>{ renderRoster(); show('#pickScreen'); };
 function renderProfile(){
   $('#profileLevel').textContent=player.level;
   $('#profileCoins').textContent=player.coins;
-  const pct=(player.xp/LEVEL_UP_XP)*100;
-  $('#xpBar').style.width=pct+'%';
-  $('#xpText').textContent=player.xp+'/'+LEVEL_UP_XP;
+  const need=xpForLevel(player.level);
+  $('#xpBar').style.width=(player.xp/need*100)+'%';
+  $('#xpText').textContent=player.xp+'/'+need;
 }
 
 /* ---------- roster render ---------- */
@@ -669,6 +718,56 @@ function upgradeAtk(id,cost){
   renderShop();
   const m=ROSTER.find(x=>x.id===id);
   if(m) floatText('#shopRoster',`${m.name} +${upg.atkLevel}!`,'var(--magenta)');
+}
+
+/* ---------- gear shop render ---------- */
+const SLOT_LABEL={weapon:'⚔️ WEAPON',armor:'🛡️ ARMOR',trinket:'✨ TRINKET'};
+function renderItemShop(){
+  $('#itemsLevel').textContent=player.level;
+  $('#itemsCoins').textContent=player.coins;
+  const wrap=$('#itemShopWrap'); wrap.innerHTML='';
+  ['weapon','armor','trinket'].forEach(slot=>{
+    wrap.insertAdjacentHTML('beforeend',`<div class="section-label"><span class="dot"></span>${SLOT_LABEL[slot]}</div>`);
+    ITEM_CATALOG.filter(it=>it.slot===slot).forEach(it=>{
+      const locked=player.level<it.reqLevel;
+      const owned=ownsItem(it.id);
+      const equipped=player.inventory.equipped[slot]===it.id;
+      const canAfford=player.coins>=it.cost;
+      const card=document.createElement('div'); card.className='mon-card';
+      card.style.cssText='width:100%;margin-bottom:10px;'+(equipped?'border-color:var(--good);box-shadow:0 0 18px rgba(60,255,142,.4);':'');
+      let btnLabel,btnDisabled,btnColor;
+      if(locked){ btnLabel='LOCKED · Lv'+it.reqLevel; btnDisabled=true; btnColor='#444'; }
+      else if(equipped){ btnLabel='EQUIPPED — TAP TO UNEQUIP'; btnDisabled=false; btnColor='#1d5c3a'; }
+      else if(owned){ btnLabel='EQUIP'; btnDisabled=false; btnColor='var(--cyan)'; }
+      else { btnLabel=`BUY — ${it.cost}💰`; btnDisabled=!canAfford; btnColor=canAfford?'var(--magenta)':'#444'; }
+      card.innerHTML=`
+        <div style="display:flex;align-items:center;gap:14px;text-align:left;">
+          <div style="font-size:34px;flex:none;filter:${locked?'grayscale(1) opacity(.5)':'none'}">${it.icon}</div>
+          <div style="flex:1;min-width:0;">
+            <div class="mon-name" style="color:${locked?'#666':'var(--c, #00f0ff)'}">${it.name}</div>
+            <div class="mon-stats" style="margin-top:2px;">${it.desc}</div>
+          </div>
+        </div>
+        <button style="width:100%;margin-top:10px;padding:9px;font-size:12px;background:${btnColor};color:#fff;border:none;border-radius:6px;cursor:${btnDisabled?'default':'pointer'};opacity:${btnDisabled&&!equipped?'.5':'1'};" ${btnDisabled?'disabled':''}>${btnLabel}</button>`;
+      card.querySelector('button').onclick=()=>handleItemClick(it,slot,owned,equipped,locked);
+      wrap.appendChild(card);
+    });
+  });
+}
+function handleItemClick(it,slot,owned,equipped,locked){
+  if(locked) return;
+  if(equipped){ player.inventory.equipped[slot]=null; haptic('light'); }
+  else if(owned){ player.inventory.equipped[slot]=it.id; haptic('success'); }
+  else { // buy — auto-equips since a slot can only hold one item anyway
+    if(player.coins<it.cost){ haptic('error'); return; }
+    player.coins-=it.cost;
+    player.inventory.owned.push(it.id);
+    player.inventory.equipped[slot]=it.id;
+    haptic('success');
+    floatText('#itemShopWrap',`${it.name} equipped!`,'var(--magenta)');
+  }
+  saveProgress();
+  renderItemShop();
 }
 
 /* ================= SCAN ================= */
@@ -855,10 +954,10 @@ function buildEnemy(){
 }
 /* shared battle setup — assumes you/foe/youHP/foeHP are already set by the caller.
    Resets per-battle transient state so HP can be carried across dungeon floors. */
-function enterBattle(introMsg){
+function enterBattle(introMsg,startUlt=0){
   youShield=0; foeShield=0;
   youWeaken=0; foeWeaken=0; foeStun=false; turn='you'; currentRoll=null; busy=false;
-  youUltCharge=0; foeBurnTurns=0; foeBurnDmg=0; youBoostTurns=0;
+  youUltCharge=startUlt; foeBurnTurns=0; foeBurnDmg=0; youBoostTurns=0;
   if(!you.ult) you.ult=JSON.parse(JSON.stringify(DEFAULT_ULTS[you.el]||DEFAULT_ULTS.nature));
   show('#battle');
   renderFighter('#youBox',you,false); renderFighter('#enemyBox',foe,true);
@@ -867,14 +966,22 @@ function enterBattle(introMsg){
   const sc=$('#bxScroll'); if(sc) sc.scrollTop=0;
   setTurn('you'); log(introMsg);
 }
+/* applies fighter-upgrade levels + equipped gear on top of a fighter's base stats.
+   Returns the trinket's starting ultimate charge (0 if none equipped). */
+function applyLoadout(fighter){
+  fighter.atk*=getAtkMult(fighter.id);
+  fighter.maxhp=getMaxHP(fighter.maxhp,fighter.id);
+  const wpn=getEquippedItem('weapon'), arm=getEquippedItem('armor'), trk=getEquippedItem('trinket');
+  if(wpn) fighter.atk*=(1+wpn.atkBonus);
+  if(arm) fighter.maxhp=Math.round(fighter.maxhp*(1+arm.hpBonus));
+  return trk?trk.ultStart:0;
+}
 function beginBattle(chosen){
   gameMode='normal';
   you=JSON.parse(JSON.stringify(chosen)); foe=buildEnemy();
-  // apply upgrades to player fighter
-  you.atk*=getAtkMult(you.id);
-  you.maxhp=getMaxHP(you.maxhp,you.id);
+  const startUlt=applyLoadout(you);
   youHP=you.maxhp; foeHP=foe.maxhp;
-  enterBattle(`A wild ${foe.name} appears!`);
+  enterBattle(`A wild ${foe.name} appears!`,startUlt);
 }
 
 /* ================= DUNGEON ================= */
@@ -883,8 +990,7 @@ let dungeon={active:false,floor:1,coins:0,xp:0};
 let dungeonPick=null;
 
 function grantRewards(coins,xp){ // single place that banks dungeon loot + levels up
-  player.coins+=coins; player.totalXP+=xp; player.xp+=xp;
-  while(player.xp>=LEVEL_UP_XP){ player.xp-=LEVEL_UP_XP; player.level++; }
+  player.coins+=coins; return applyXP(xp);
 }
 function isBossFloor(f){ return f%5===0; }
 
@@ -910,8 +1016,7 @@ function startDungeon(chosen){
   gameMode='dungeon';
   dungeon={active:true,floor:1,coins:0,xp:0};
   you=JSON.parse(JSON.stringify(chosen));
-  you.atk*=getAtkMult(you.id);
-  you.maxhp=getMaxHP(you.maxhp,you.id);
+  applyLoadout(you);
   youHP=you.maxhp;
   beginDungeonFloor();
 }
@@ -933,7 +1038,8 @@ function beginDungeonFloor(){
   foe=buildDungeonEnemy(dungeon.floor);
   foeHP=foe.maxhp;
   const boss=foe._boss;
-  enterBattle(boss?`⚠ BOSS! ${foe.name} guards Floor ${dungeon.floor}!`:`Floor ${dungeon.floor} — ${foe.name} appears!`);
+  const trk=getEquippedItem('trinket');
+  enterBattle(boss?`⚠ BOSS! ${foe.name} guards Floor ${dungeon.floor}!`:`Floor ${dungeon.floor} — ${foe.name} appears!`,trk?trk.ultStart:0);
 }
 
 function endDungeonBattle(won){
@@ -949,11 +1055,11 @@ function endDungeonBattle(won){
   const xpR=Math.round((40+dungeon.floor*15)*(boss?2:1));
   dungeon.coins+=coinR; dungeon.xp+=xpR;
   if(dungeon.floor>=DUNGEON_FLOORS){ // conquered the whole dungeon
-    grantRewards(dungeon.coins,dungeon.xp);
+    const lv=grantRewards(dungeon.coins,dungeon.xp);
     player.bestFloor=DUNGEON_FLOORS;
     saveProgress(); saveUpgrades();
     gameMode='normal'; dungeon.active=false;
-    return showDungeonSummary('win',DUNGEON_FLOORS);
+    return showDungeonSummary('win',DUNGEON_FLOORS,lv);
   }
   const heal=Math.round(you.maxhp*0.25);
   youHP=Math.min(you.maxhp,youHP+heal);
@@ -970,7 +1076,7 @@ function showFloorClear(coinR,xpR,heal){
   show('#floorClearScreen');
 }
 
-function showDungeonSummary(result,cleared){
+function showDungeonSummary(result,cleared,lv){
   const emoji=result==='win'?'👑':result==='banked'?'💰':'💀';
   const title=result==='win'?'DUNGEON CLEARED!':result==='banked'?'ESCAPED SAFELY':'YOU FELL';
   $('#dsEmoji').textContent=emoji;
@@ -978,8 +1084,13 @@ function showDungeonSummary(result,cleared){
   const lootLine=result==='dead'
     ? `<div style="color:#ff6a6a">Forfeited ${dungeon.coins}💰 ${dungeon.xp}✨ — unbanked!</div>`
     : `<div>Looted +${dungeon.coins}💰 +${dungeon.xp}✨</div>`;
+  let extra='';
+  if(lv&&lv.leveledUp){
+    extra+=`<div style="color:var(--good)">⬆ LEVEL ${lv.newLevel}! +${lv.bonusCoins}💰 bonus</div>`;
+    if(lv.unlocked.length) extra+=`<div style="color:var(--magenta)">🎁 Unlocked: ${lv.unlocked.join(', ')}</div>`;
+  }
   $('#dsSub').innerHTML=`<div>Reached Floor ${Math.max(0,cleared)} / ${DUNGEON_FLOORS}</div>`+
-    lootLine+`<div style="color:var(--elec)">Best: Floor ${player.bestFloor||0}</div>`;
+    lootLine+extra+`<div style="color:var(--elec)">Best: Floor ${player.bestFloor||0}</div>`;
   show('#dungeonEndScreen');
 }
 function renderFighter(sel,m,enemy){
@@ -1376,17 +1487,17 @@ function endGame(won){
   $('#rulesOv').classList.add('hidden'); $('#logOv').classList.add('hidden');
   if(gameMode==='dungeon') return endDungeonBattle(won);
   const coinReward=won?50:15, xpReward=won?100:40;
-  player.coins+=coinReward; player.totalXP+=xpReward; player.xp+=xpReward;
-
-  // level up check
-  let leveledUp=false;
-  while(player.xp>=LEVEL_UP_XP){ player.xp-=LEVEL_UP_XP; player.level++; leveledUp=true; }
+  player.coins+=coinReward;
+  const lv=applyXP(xpReward);
 
   $('#endEmoji').textContent=won?'🏆':'💀';
   const t=$('#endText'); t.textContent=won?'VICTORY':'DEFEAT'; t.className='result-big '+(won?'win':'lose');
   let subtitle=won?`${you.name} stands triumphant`:`${foe.name} wins this duel`;
   subtitle+=`\n+${coinReward}💰 +${xpReward}✨`;
-  if(leveledUp) subtitle+=` → LEVEL ${player.level}!`;
+  if(lv.leveledUp){
+    subtitle+=` → LEVEL ${lv.newLevel}! (+${lv.bonusCoins}💰 bonus)`;
+    if(lv.unlocked.length) subtitle+=`\n🎁 Unlocked: ${lv.unlocked.join(', ')}`;
+  }
   $('#endSub').innerHTML=subtitle.split('\n').map(s=>`<div>${s}</div>`).join('');
   saveProgress(); saveUpgrades();
   show('#endScreen');

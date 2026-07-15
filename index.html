@@ -305,6 +305,7 @@
       <button id="startBattle" disabled>FIGHT</button>
       <button class="btn-dungeon" id="goDungeon">🏰 ENTER DUNGEON</button>
       <button class="btn-scan" id="goScan">📷 SCAN NEW FIGHTER</button>
+      <button class="btn-ghost mini" id="rosterProfile">👤 PROFILE · 🏪 SHOP · 🎒 GEAR</button>
     </div>
   </div>
 
@@ -637,6 +638,7 @@ $('#goFight').onclick=()=>{ renderRoster(); show('#pickScreen'); };
 $('#goShop').onclick=()=>{ renderShop(); show('#shopScreen'); };
 $('#shopBack').onclick=()=>{ renderProfile(); show('#homeScreen'); };
 $('#startProfile').onclick=()=>{ renderProfile(); show('#homeScreen'); };
+$('#rosterProfile').onclick=()=>{ renderProfile(); show('#homeScreen'); };
 $('#goItems').onclick=()=>{ renderItemShop(); show('#itemShopScreen'); };
 $('#itemsBack').onclick=()=>{ renderProfile(); show('#homeScreen'); };
 

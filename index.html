@@ -113,33 +113,33 @@
   .bx-bottom button:hover{color:var(--ink);border-color:#3a3f6e;transform:none;box-shadow:none;}
 
   /* fighter cards */
-  .fcard{position:relative;display:flex;align-items:center;gap:9px;border-radius:13px;padding:6px 10px;margin:3px 0;min-width:0;flex:none;
+  .fcard{position:relative;display:flex;align-items:center;gap:11px;border-radius:14px;padding:8px 13px;margin:4px 0;min-width:0;flex:none;
     background:linear-gradient(150deg,rgba(20,22,44,.85),rgba(10,11,24,.9));
     border:2px solid var(--c);box-shadow:0 0 22px -6px var(--cg),inset 0 0 26px -15px var(--c);}
   .fcard.enemy{flex-direction:row-reverse;}
-  .fcard .avatar{font-size:clamp(24px,5.5vh,36px);line-height:1;flex:none;filter:drop-shadow(0 0 14px var(--cg));transition:transform .15s;}
+  .fcard .avatar{font-size:clamp(30px,6.9vh,45px);line-height:1;flex:none;filter:drop-shadow(0 0 14px var(--cg));transition:transform .15s;}
   .fcard.enemy .avatar{transform:scaleX(-1);}
   .fcard .meta{flex:1;min-width:0;}
   .fcard.you .meta{text-align:right;}
-  .nm{font-family:'Orbitron',sans-serif;font-weight:800;font-size:clamp(13px,2.9vh,17px);letter-spacing:.5px;color:var(--ink);
+  .nm{font-family:'Orbitron',sans-serif;font-weight:800;font-size:clamp(16px,3.6vh,21px);letter-spacing:.5px;color:var(--ink);
     white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  .el-badge{display:inline-flex;align-items:center;gap:4px;font-family:'Orbitron',sans-serif;font-size:9px;font-weight:700;
-    letter-spacing:1.2px;padding:1px 8px;border-radius:14px;margin-top:2px;text-transform:uppercase;
+  .el-badge{display:inline-flex;align-items:center;gap:4px;font-family:'Orbitron',sans-serif;font-size:11px;font-weight:700;
+    letter-spacing:1.2px;padding:2px 10px;border-radius:14px;margin-top:3px;text-transform:uppercase;
     background:var(--cg);color:var(--c);border:1px solid var(--c);}
-  .hpwrap{margin-top:4px;height:13px;background:#0c0e1e;border-radius:7px;overflow:hidden;position:relative;border:1px solid #22254a;}
-  .hpbar{height:100%;border-radius:7px;transition:width .45s cubic-bezier(.4,0,.2,1);background:linear-gradient(90deg,var(--good),#2dffb0);}
+  .hpwrap{margin-top:5px;height:16px;background:#0c0e1e;border-radius:8px;overflow:hidden;position:relative;border:1px solid #22254a;}
+  .hpbar{height:100%;border-radius:8px;transition:width .45s cubic-bezier(.4,0,.2,1);background:linear-gradient(90deg,var(--good),#2dffb0);}
   .hpbar.low{background:linear-gradient(90deg,var(--fire),#ff8a3c);}
-  .hptxt{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:#fff;text-shadow:0 1px 2px #000;letter-spacing:.5px;}
-  .shield-ind{font-size:9px;color:var(--cyan);margin-top:1px;height:11px;letter-spacing:.5px;}
+  .hptxt{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;text-shadow:0 1px 2px #000;letter-spacing:.5px;}
+  .shield-ind{font-size:10px;color:var(--cyan);margin-top:2px;height:13px;letter-spacing:.5px;}
   .fcard.you .shield-ind{text-align:right;}
-  .vs-badge{width:38px;margin:-3px auto;text-align:center;font-family:'Orbitron',sans-serif;font-weight:900;font-size:10px;
-    letter-spacing:1.2px;color:var(--ink);padding:4px 0;position:relative;z-index:2;flex:none;
+  .vs-badge{width:46px;margin:-4px auto;text-align:center;font-family:'Orbitron',sans-serif;font-weight:900;font-size:12px;
+    letter-spacing:1.2px;color:var(--ink);padding:5px 0;position:relative;z-index:2;flex:none;
     background:linear-gradient(180deg,#171b36,#0d1024);border:1px solid #2a2f57;
     clip-path:polygon(0 22%,50% 0,100% 22%,100% 78%,50% 100%,0 78%);}
 
   /* dice row: roll button (left ~30%) + dice tray (right ~70%, bigger) */
   .dice-row{display:flex;gap:8px;align-items:stretch;}
-  #tray{position:relative;flex:1;min-width:0;height:clamp(84px,20vh,190px);border-radius:12px;background:rgba(8,10,22,.6);
+  #tray{position:relative;flex:1;min-width:0;height:clamp(67px,16vh,152px);border-radius:12px;background:rgba(8,10,22,.6);
     border:1.5px dashed #23233f;overflow:hidden;display:flex;align-items:center;justify-content:center;touch-action:none;perspective:700px;}
   #tray.armed{border-color:var(--cyan);box-shadow:inset 0 0 30px rgba(0,240,255,.12);}
   #tray.armed .tray-hint .arrow{animation:bob 1.1s ease-in-out infinite;}
@@ -152,17 +152,17 @@
   #power::after{content:'';position:absolute;left:0;right:0;top:0;height:12%;
     background:rgba(255,45,155,.5);border-bottom:2px solid var(--magenta);box-shadow:0 0 8px var(--magenta);}
 
-  .scene{position:absolute;width:72px;height:72px;transform-style:preserve-3d;will-change:transform;}
-  .face{position:absolute;width:72px;height:72px;border-radius:13px;background:linear-gradient(145deg,#fff,#d4d5ec);
+  .scene{position:absolute;width:58px;height:58px;transform-style:preserve-3d;will-change:transform;}
+  .face{position:absolute;width:58px;height:58px;border-radius:11px;background:linear-gradient(145deg,#fff,#d4d5ec);
     box-shadow:inset 0 0 0 1px rgba(0,0,0,.12), inset 0 -5px 10px rgba(0,0,0,.18);
-    display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);padding:10px;backface-visibility:hidden;}
+    display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);padding:8px;backface-visibility:hidden;}
   .scene.crit .face{background:linear-gradient(145deg,#fff6d6,var(--elec));box-shadow:inset 0 0 0 1px rgba(120,90,0,.3),0 0 18px var(--elec);}
-  .pip{width:10px;height:10px;border-radius:50%;background:#10101f;align-self:center;justify-self:center;}
+  .pip{width:8px;height:8px;border-radius:50%;background:#10101f;align-self:center;justify-self:center;}
   .scene.crit .pip{background:#6b4f00;}
-  .f1{transform:rotateY(0deg) translateZ(36px);} .f2{transform:rotateY(90deg) translateZ(36px);}
-  .f3{transform:rotateY(180deg) translateZ(36px);} .f4{transform:rotateY(-90deg) translateZ(36px);}
-  .f5{transform:rotateX(90deg) translateZ(36px);} .f6{transform:rotateX(-90deg) translateZ(36px);}
-  .die-shadow{position:absolute;width:62px;height:15px;border-radius:50%;pointer-events:none;
+  .f1{transform:rotateY(0deg) translateZ(29px);} .f2{transform:rotateY(90deg) translateZ(29px);}
+  .f3{transform:rotateY(180deg) translateZ(29px);} .f4{transform:rotateY(-90deg) translateZ(29px);}
+  .f5{transform:rotateX(90deg) translateZ(29px);} .f6{transform:rotateX(-90deg) translateZ(29px);}
+  .die-shadow{position:absolute;width:50px;height:12px;border-radius:50%;pointer-events:none;
     background:radial-gradient(ellipse,rgba(0,0,0,.6),transparent 70%);filter:blur(2px);}
   #tray.critflash{animation:critflash .65s ease;}
   @keyframes critflash{
@@ -170,8 +170,12 @@
     100%{box-shadow:inset 0 0 30px rgba(0,240,255,.12);}
   }
 
+  /* invisible filler — soaks up any leftover height so the dice panel sits
+     just above the bottom bar instead of floating right after the abilities */
+  .dice-spacer{flex:1;min-height:0;}
+
   /* turn panel + roll CTA */
-  .turn-panel{position:relative;margin:8px 0 4px;border-radius:14px;padding:11px 12px 9px;flex:none;
+  .turn-panel{position:relative;margin:0 0 4px;border-radius:14px;padding:11px 12px 9px;flex:none;
     background:linear-gradient(160deg,rgba(16,20,42,.92),rgba(9,11,26,.94));border:1.5px solid rgba(47,107,208,.5);
     box-shadow:0 0 26px -12px rgba(0,120,255,.6);}
   .turn-tab{position:absolute;top:-10px;left:14px;font-family:'Orbitron',sans-serif;font-weight:700;font-size:10px;letter-spacing:1.5px;
@@ -184,8 +188,8 @@
     box-shadow:0 6px 18px -6px rgba(20,120,230,.8),inset 0 1px 0 rgba(255,255,255,.25);}
   .roll-cta:active{transform:translateY(1px);}
   .roll-cta:disabled{opacity:.4;box-shadow:none;}
-  .roll-cta .bico{font-size:22px;}
-  .roll-cta .rc-label{font-size:11px;}
+  .roll-cta .bico{font-size:19px;}
+  .roll-cta .rc-label{font-size:10px;}
   .roll-sub{text-align:center;font-size:10px;color:#7a80a8;letter-spacing:.5px;margin-top:6px;min-height:12px;}
   .roll-readout{text-align:center;min-height:18px;margin-top:4px;font-family:'Orbitron',sans-serif;font-weight:700;letter-spacing:1.5px;font-size:clamp(12px,3.6vh,15px);}
   .roll-readout .pool{color:var(--elec);text-shadow:0 0 12px var(--elec);}
@@ -270,19 +274,19 @@
 
   /* extra-short screens: shrink everything EXCEPT the dice tray, which stays the priority */
   @media (max-height:720px){
-    .fcard{padding:5px 8px;margin:2px 0;gap:7px;} .fcard .avatar{font-size:clamp(20px,5vh,28px);}
-    .el-badge{margin-top:1px;padding:1px 6px;}
-    .hpwrap{height:11px;margin-top:2px;} .hptxt{font-size:7px;}
-    .shield-ind{margin-top:1px;height:9px;font-size:8px;}
+    .fcard{padding:6px 9px;margin:3px 0;gap:8px;} .fcard .avatar{font-size:clamp(25px,6.2vh,35px);}
+    .el-badge{margin-top:2px;padding:1px 7px;}
+    .hpwrap{height:12px;margin-top:2px;} .hptxt{font-size:8px;}
+    .shield-ind{margin-top:1px;height:10px;font-size:8px;}
     .vs-badge{margin:-3px auto;padding:3px 0;}
     .section-label{margin:4px 2px 3px;}
     .skills{gap:4px;}
     .skill-btn{padding:5px 8px;gap:7px;} .sk-ico{width:26px;height:26px;font-size:14px;border-radius:7px;}
     .sk-name{font-size:11px;}
-    .turn-panel{margin:5px 0 3px;padding:8px 9px 6px;}
-    #tray{height:clamp(66px,11vh,96px);}
+    .turn-panel{margin:0 0 3px;padding:8px 9px 6px;}
+    #tray{height:clamp(53px,9vh,77px);}
     .tray-hint{font-size:8px;line-height:1.15;} .tray-hint .arrow{font-size:12px;}
-    .roll-cta{padding:6px 3px;} .roll-cta .bico{font-size:18px;} .roll-cta .rc-label{font-size:10px;}
+    .roll-cta{padding:6px 3px;} .roll-cta .bico{font-size:16px;} .roll-cta .rc-label{font-size:9px;}
     .roll-sub{min-height:10px;margin-top:4px;}
     .roll-readout{min-height:14px;margin-top:2px;}
   }
@@ -369,6 +373,7 @@
       <div class="skills" id="skills"></div>
       <div id="log"></div>
 
+      <div class="dice-spacer"></div>
       <div class="turn-panel">
         <div class="turn-tab" id="turnFlag">YOUR TURN</div>
         <div class="dice-row">
@@ -1311,11 +1316,11 @@ function rollDice(power,up,bias=0,perfect=false){
   setTimeout(()=>{
     if(st.done) return;
     const scenes=[...tray.querySelectorAll('.scene')];
-    [{val:v1,x:-76},{val:v2,x:76}].forEach((info,i)=>{ const sc=scenes[i]; if(!sc) return;
+    [{val:v1,x:-61},{val:v2,x:61}].forEach((info,i)=>{ const sc=scenes[i]; if(!sc) return;
       const f=faceRotation(info.val); sc.style.transform=`translate(${info.x}px,0) rotateX(${f.x}deg) rotateY(${f.y}deg)`; });
     finish();
   }, dur+700);
-  [{val:v1,x:-76},{val:v2,x:76}].forEach((info,idx)=>{
+  [{val:v1,x:-61},{val:v2,x:61}].forEach((info,idx)=>{
     const s=makeScene(); if(isDouble)s.classList.add('crit'); tray.appendChild(s);
     const sh=document.createElement('div'); sh.className='die-shadow'; tray.appendChild(sh);
     const baseX=info.x, spinX=(reduce?1:(3+Math.random()*4))*power, spinY=(reduce?1:(3+Math.random()*4))*power;

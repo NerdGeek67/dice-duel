@@ -247,10 +247,36 @@
   @keyframes floatUp{0%{opacity:0;transform:translateY(0) scale(.6);}20%{opacity:1;transform:translateY(-12px) scale(1.15);}100%{opacity:0;transform:translateY(-60px) scale(1);}}
   canvas#fx{position:absolute;inset:0;pointer-events:none;z-index:25;}
 
-  .final-emoji{font-size:68px;margin-bottom:10px;filter:drop-shadow(0 0 18px var(--cyan));}
+  .final-emoji{position:relative;z-index:1;font-size:68px;margin-bottom:10px;filter:drop-shadow(0 0 18px var(--cyan));}
   .result-big{font-family:'Orbitron',sans-serif;font-weight:900;font-size:44px;letter-spacing:4px;}
   .win{color:var(--good);text-shadow:0 0 24px rgba(60,255,142,.5);}
   .lose{color:var(--fire);text-shadow:0 0 24px rgba(255,90,60,.5);}
+
+  /* victory celebration */
+  .win-fx-wrap{position:relative;display:flex;align-items:center;justify-content:center;}
+  .victory-rays{position:absolute;top:50%;left:50%;width:260px;height:260px;margin:-130px 0 0 -130px;z-index:0;
+    background:repeating-conic-gradient(from 0deg,rgba(255,210,63,.4) 0deg 8deg,transparent 8deg 20deg);
+    border-radius:50%;pointer-events:none;opacity:0;}
+  .victory-rays.show{animation:raysFadeIn .5s ease-out forwards,raysSpin 9s linear infinite,raysPulse 1.8s ease-in-out infinite;}
+  @keyframes raysFadeIn{to{opacity:1;}}
+  @keyframes raysSpin{to{transform:rotate(360deg);}}
+  @keyframes raysPulse{0%,100%{opacity:.55;}50%{opacity:.95;}}
+  .victory-flash{position:absolute;inset:0;z-index:22;pointer-events:none;
+    background:radial-gradient(circle at 50% 38%,rgba(255,210,63,.55),rgba(255,180,20,.15) 45%,transparent 72%);
+    animation:victoryFlashFade .9s ease-out forwards;}
+  @keyframes victoryFlashFade{0%{opacity:0;}15%{opacity:1;}100%{opacity:0;}}
+  .final-emoji.win-pop{animation:winPop .8s cubic-bezier(.2,1.6,.35,1) both;}
+  @keyframes winPop{
+    0%{transform:scale(0) rotate(-25deg);opacity:0;}
+    55%{transform:scale(1.35) rotate(8deg);opacity:1;}
+    75%{transform:scale(.92) rotate(-4deg);}
+    100%{transform:scale(1) rotate(0deg);}
+  }
+  .result-big.win-pop{animation:textPop .6s cubic-bezier(.2,1.6,.35,1) .15s both;}
+  @keyframes textPop{
+    0%{transform:scale(.4);opacity:0;letter-spacing:14px;}
+    100%{transform:scale(1);opacity:1;letter-spacing:4px;}
+  }
 
   .spinner{width:42px;height:42px;border:3px solid #23233f;border-top-color:var(--magenta);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 16px;}
   @keyframes spin{to{transform:rotate(360deg);}}
@@ -407,7 +433,10 @@
 
   <!-- END -->
   <div class="screen hidden" id="endScreen">
-    <div class="final-emoji" id="endEmoji">🏆</div>
+    <div class="win-fx-wrap">
+      <div class="victory-rays" id="victoryRays"></div>
+      <div class="final-emoji" id="endEmoji">🏆</div>
+    </div>
     <div class="result-big" id="endText">VICTORY</div>
     <div class="tag" id="endSub" style="margin-top:14px">well rolled</div>
     <div class="btn-row"><button id="rematch">BACK TO ROSTER</button></div>
@@ -1495,12 +1524,47 @@ function fxLoop(){
   fctx.clearRect(0,0,fx.width,fx.height);
   if(shakeAmt>0.2){const ox=(Math.random()-.5)*shakeAmt,oy=(Math.random()-.5)*shakeAmt;shakeAmt*=0.85;$('#battle').style.transform=`translate(${ox}px,${oy}px)`;}
   else{shakeAmt=0;$('#battle').style.transform='';}
-  parts.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.vx*=.94;p.vy*=.94;p.life-=.025;if(p.life<=0)return;
-    fctx.globalAlpha=Math.max(0,p.life);fctx.fillStyle=p.color;fctx.shadowColor=p.color;fctx.shadowBlur=8;
-    fctx.beginPath();fctx.arc(p.x,p.y,p.size,0,Math.PI*2);fctx.fill();});
+  parts.forEach(p=>{
+    p.x+=p.vx; p.y+=p.vy;
+    if(p.grav){ p.vy+=p.grav; } else { p.vx*=.94; p.vy*=.94; } // confetti falls with gravity; hit-fx particles just decay
+    p.life-=(p.decay||.025); if(p.life<=0) return;
+    if(p.rotSpeed) p.rot=(p.rot||0)+p.rotSpeed;
+    fctx.save(); fctx.globalAlpha=Math.max(0,p.life); fctx.translate(p.x,p.y);
+    if(p.rot) fctx.rotate(p.rot*Math.PI/180);
+    fctx.fillStyle=p.color; fctx.shadowColor=p.color; fctx.shadowBlur=p.grav?5:8;
+    if(p.shape==='rect'){ fctx.fillRect(-p.size,-p.size*0.4,p.size*2,p.size*0.8); }
+    else { fctx.beginPath(); fctx.arc(0,0,p.size,0,Math.PI*2); fctx.fill(); }
+    fctx.restore();
+  });
   fctx.globalAlpha=1;fctx.shadowBlur=0;parts=parts.filter(p=>p.life>0);requestAnimationFrame(fxLoop);
 }
 requestAnimationFrame(fxLoop);
+
+/* victory celebration: confetti rain + light rays + flash + bounce-in text.
+   Runs a few staggered waves so the confetti feels sustained, not a single puff. */
+function victoryCelebration(){
+  haptic('success');
+  const rays=$('#victoryRays'); rays.classList.remove('show'); void rays.offsetWidth; rays.classList.add('show');
+  const emoji=$('#endEmoji'); emoji.classList.remove('win-pop'); void emoji.offsetWidth; emoji.classList.add('win-pop');
+  const text=$('#endText'); text.classList.remove('win-pop'); void text.offsetWidth; text.classList.add('win-pop');
+  if(reduce) return; // skip the flash/confetti burst for reduced-motion users; screen + haptic still land
+  const flash=document.createElement('div'); flash.className='victory-flash'; $('#app').appendChild(flash);
+  setTimeout(()=>flash.remove(),950);
+  const w=$('#app').getBoundingClientRect().width;
+  const colors=['#ffd23f','#ff2d9b','#00f0ff','#3cff8e','#ff5a3c'];
+  let wave=0;
+  (function rain(){
+    for(let i=0;i<14;i++){
+      parts.push({x:Math.random()*w,y:-10-Math.random()*30,
+        vx:(Math.random()-.5)*2.4,vy:1+Math.random()*1.6,
+        life:1,decay:0.005+Math.random()*0.004,color:colors[i%colors.length],
+        size:3+Math.random()*3,grav:0.05+Math.random()*0.05,
+        rot:Math.random()*360,rotSpeed:(Math.random()-.5)*14,
+        shape:Math.random()<0.5?'rect':'circle'});
+    }
+    wave++; if(wave<5) setTimeout(rain,220);
+  })();
+}
 
 function endGame(won){
   $('#battle').style.transform='';
@@ -1521,6 +1585,7 @@ function endGame(won){
   $('#endSub').innerHTML=subtitle.split('\n').map(s=>`<div>${s}</div>`).join('');
   saveProgress(); saveUpgrades();
   show('#endScreen');
+  if(won) victoryCelebration();
 }
 
 /* ---------- battle bottom bar + overlays ---------- */

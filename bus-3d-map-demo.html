@@ -393,19 +393,10 @@ function buildBus() {
   skirt.position.y = GROUND_CLEARANCE + 0.28;
   bus.add(skirt);
 
-  // roof curve (rounded top using a scaled cylinder half)
-  const roofGeo = new THREE.CylinderGeometry(BODY_W / 2, BODY_W / 2, BODY_L, 16, 1, false, 0, Math.PI);
-  const roof = new THREE.Mesh(roofGeo, purple);
-  roof.rotation.z = Math.PI / 2;
-  roof.rotation.y = Math.PI / 2;
-  roof.scale.set(1, 0.42, 1);
-  roof.position.y = GROUND_CLEARANCE + BODY_H;
-  roof.castShadow = true;
-  bus.add(roof);
-
   // roof A/C unit
   const ac = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.4, 1.6), white);
-  ac.position.set(-1, GROUND_CLEARANCE + BODY_H + 0.55, 0);
+  ac.position.set(-1, GROUND_CLEARANCE + BODY_H + 0.2, 0);
+  ac.castShadow = true;
   bus.add(ac);
 
   // windshield (angled front glass)
@@ -455,9 +446,9 @@ function buildBus() {
   function wheel(x, z) {
     const g = new THREE.Group();
     const tire = new THREE.Mesh(new THREE.CylinderGeometry(0.48, 0.48, 0.35, 20), tireMat);
-    tire.rotation.z = Math.PI / 2;
+    tire.rotation.x = Math.PI / 2;
     const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 0.36, 12), rimMat);
-    rim.rotation.z = Math.PI / 2;
+    rim.rotation.x = Math.PI / 2;
     g.add(tire, rim);
     g.position.set(x, 0.5, z);
     g.castShadow = true;
@@ -494,6 +485,11 @@ const state = {
 
 const ROUTE_LENGTH_M = routeCurve.getLength(); // approx meters for this closed loop
 
+const _qYaw = new THREE.Quaternion();
+const _qRoll = new THREE.Quaternion();
+const _yAxis = new THREE.Vector3(0, 1, 0);
+const _xAxis = new THREE.Vector3(1, 0, 0);
+
 function updateBusTransform() {
   const pos = routeCurve.getPointAt(state.t);
   const tangent = routeCurve.getTangentAt(state.t).normalize();
@@ -503,8 +499,17 @@ function updateBusTransform() {
   // slight banking into turns based on curvature estimate
   const tNext = routeCurve.getTangentAt((state.t + 0.002) % 1).normalize();
   const turnAmount = tangent.clone().sub(tNext).length() * 6;
-  bus.rotation.set(0, heading + Math.PI / 2, 0);
-  bus.rotation.z = THREE.MathUtils.clamp(turnAmount, -0.12, 0.12) * (tangent.x * tNext.z - tangent.z * tNext.x > 0 ? 1 : -1);
+  const bank = THREE.MathUtils.clamp(turnAmount, -0.12, 0.12) *
+    (tangent.x * tNext.z - tangent.z * tNext.x > 0 ? 1 : -1);
+
+  // Roll happens around the bus's own forward axis (local +X, since the body
+  // is modeled along X), then yaw points that rolled bus at the heading —
+  // applying roll as a raw rotation.z after setting rotation.y rotates around
+  // the wrong (world) axis once heading != 0, which is what made the bus look
+  // tilted even on straight sections.
+  _qYaw.setFromAxisAngle(_yAxis, heading + Math.PI / 2);
+  _qRoll.setFromAxisAngle(_xAxis, bank);
+  bus.quaternion.copy(_qYaw).multiply(_qRoll);
 
   document.getElementById('headingVal').textContent = Math.round(((heading * 180 / Math.PI) + 360) % 360);
   document.getElementById('progressVal').textContent = Math.round(state.t * 100);

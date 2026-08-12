@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>3D Bus Route — Three.js Map Demo</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0f14; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  #canvas-wrap { position: absolute; inset: 0; }
+  canvas { display: block; }
+
+  #hud {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    right: 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    pointer-events: none;
+    z-index: 10;
+  }
+  #title {
+    background: rgba(15, 18, 26, 0.72);
+    backdrop-filter: blur(6px);
+    color: #f1f3f8;
+    padding: 10px 16px;
+    border-radius: 12px;
+    font-size: 14px;
+    line-height: 1.4;
+    border: 1px solid rgba(255,255,255,0.08);
+    pointer-events: auto;
+    max-width: 320px;
+  }
+  #title b { color: #b48cff; }
+  #stats {
+    background: rgba(15, 18, 26, 0.72);
+    backdrop-filter: blur(6px);
+    color: #cfd6e6;
+    padding: 10px 14px;
+    border-radius: 12px;
+    font-size: 12px;
+    border: 1px solid rgba(255,255,255,0.08);
+    text-align: right;
+    pointer-events: auto;
+  }
+  #stats div { margin-top: 2px; }
+  #stats b { color: #f1f3f8; }
+
+  #controls {
+    position: absolute;
+    bottom: 16px;
+    left: 16px;
+    right: 16px;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+    background: rgba(15, 18, 26, 0.72);
+    backdrop-filter: blur(6px);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 14px;
+    padding: 12px 16px;
+    z-index: 10;
+    color: #e7eaf3;
+    font-size: 13px;
+  }
+  #controls label { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+  #controls input[type="range"] { width: 120px; accent-color: #8b5cf6; }
+  button {
+    background: linear-gradient(135deg, #7c3aed, #5b21b6);
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.1s ease, filter 0.15s ease;
+  }
+  button:hover { filter: brightness(1.1); }
+  button:active { transform: scale(0.96); }
+  select {
+    background: #1c2230;
+    color: #e7eaf3;
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 13px;
+  }
+  #loading {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #cfd6e6;
+    font-size: 14px;
+    z-index: 20;
+    background: #0b0f14;
+  }
+</style>
+</head>
+<body>
+  <div id="loading">Loading 3D scene…</div>
+  <div id="canvas-wrap"></div>
+
+  <div id="hud">
+    <div id="title">
+      <b>Walailak University Shuttle</b> — live 3D route demo<br/>
+      Purple liveried bus, procedurally modeled, follows a real GPS-style route on a map plane.
+    </div>
+    <div id="stats">
+      <div>Speed: <b id="speedVal">28</b> km/h</div>
+      <div>Progress: <b id="progressVal">0</b>%</div>
+      <div>Heading: <b id="headingVal">0</b>°</div>
+    </div>
+  </div>
+
+  <div id="controls">
+    <button id="playBtn">Pause</button>
+    <label>Speed
+      <input id="speedSlider" type="range" min="5" max="120" value="28" />
+    </label>
+    <label>Camera
+      <select id="camMode">
+        <option value="follow">Follow (chase cam)</option>
+        <option value="orbit">Orbit (free)</option>
+        <option value="top">Top-down map</option>
+        <option value="onboard">Onboard driver view</option>
+      </select>
+    </label>
+    <label><input id="showRoute" type="checkbox" checked /> Show route line</label>
+  </div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "./vendor/three/lib/three.module.js",
+    "three/addons/": "./vendor/three/lib/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+/* ----------------------------------------------------------------------
+   3D BUS + MAP ROUTE DEMO
+   - Procedurally modeled low-poly bus (purple livery, matching the photo)
+   - "Map" ground: road network drawn on a textured plane (CanvasTexture)
+   - Bus follows a CatmullRom spline route with continuous heading + banking
+   - Three camera modes: chase cam, free orbit, top-down map view, onboard
+   This is a self-contained demo — swap ROUTE_POINTS for real lat/lng data
+   (projected to local meters) to drive it from an actual map API.
+------------------------------------------------------------------------- */
+
+const loadingEl = document.getElementById('loading');
+const wrap = document.getElementById('canvas-wrap');
+
+// ---------- Renderer / Scene / Camera ----------
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+wrap.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x9fd0e8);
+scene.fog = new THREE.Fog(0x9fd0e8, 120, 420);
+
+const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 1000);
+camera.position.set(0, 24, 40);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.enabled = false; // enabled only in orbit mode
+
+// ---------- Lighting ----------
+const hemi = new THREE.HemisphereLight(0xbfd9ff, 0x33422a, 0.9);
+scene.add(hemi);
+
+const sun = new THREE.DirectionalLight(0xfff2d9, 2.2);
+sun.position.set(60, 90, 40);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.left = -120;
+sun.shadow.camera.right = 120;
+sun.shadow.camera.top = 120;
+sun.shadow.camera.bottom = -120;
+sun.shadow.camera.near = 1;
+sun.shadow.camera.far = 300;
+scene.add(sun);
+
+// ---------- Map ground (canvas-textured, road network) ----------
+const MAP_SIZE = 400; // meters (world units)
+function buildMapTexture() {
+  const res = 2048;
+  const c = document.createElement('canvas');
+  c.width = c.height = res;
+  const ctx = c.getContext('2d');
+
+  // base terrain (grass/park tone)
+  ctx.fillStyle = '#4f7a3d';
+  ctx.fillRect(0, 0, res, res);
+
+  // scattered lighter patches (parkland variation)
+  for (let i = 0; i < 90; i++) {
+    ctx.fillStyle = `rgba(90,${140 + Math.random()*30},70,0.35)`;
+    const r = 30 + Math.random() * 80;
+    ctx.beginPath();
+    ctx.arc(Math.random()*res, Math.random()*res, r, 0, Math.PI*2);
+    ctx.fill();
+  }
+
+  // building block footprints
+  for (let i = 0; i < 26; i++) {
+    ctx.fillStyle = '#5c6472';
+    const w = 60 + Math.random()*140, h = 60 + Math.random()*140;
+    const x = Math.random() * (res - w), y = Math.random() * (res - h);
+    ctx.fillRect(x, y, w, h);
+    ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(x, y, w, h);
+  }
+
+  return { canvas: c, ctx, res };
+}
+const { canvas: mapCanvas, ctx: mapCtx, res: mapRes } = buildMapTexture();
+
+// ---------- Route: control points in world meters (x,z), y = 0 ----------
+// Swap these for real projected lat/lng points to drive from live map data.
+const ROUTE_POINTS_RAW = [
+  [-150, 0, -60],
+  [-90, 0, -95],
+  [-20, 0, -80],
+  [30, 0, -30],
+  [45, 0, 30],
+  [10, 0, 90],
+  [-60, 0, 110],
+  [-130, 0, 70],
+  [-160, 0, 10],
+];
+const routeVecs = ROUTE_POINTS_RAW.map(p => new THREE.Vector3(p[0], p[1], p[2]));
+const routeCurve = new THREE.CatmullRomCurve3(routeVecs, true, 'catmullrom', 0.5);
+
+// draw the route as a road onto the map canvas
+function pointToUV(v) {
+  const u = (v.x + MAP_SIZE / 2) / MAP_SIZE;
+  const w = (v.z + MAP_SIZE / 2) / MAP_SIZE;
+  return [u * mapRes, w * mapRes];
+}
+(function drawRoad() {
+  const samples = routeCurve.getPoints(400);
+  mapCtx.lineJoin = 'round';
+  mapCtx.lineCap = 'round';
+
+  // road bed
+  mapCtx.strokeStyle = '#2b2f36';
+  mapCtx.lineWidth = 46;
+  mapCtx.beginPath();
+  samples.forEach((p, i) => {
+    const [x, y] = pointToUV(p);
+    if (i === 0) mapCtx.moveTo(x, y); else mapCtx.lineTo(x, y);
+  });
+  mapCtx.closePath();
+  mapCtx.stroke();
+
+  // lane markings
+  mapCtx.setLineDash([28, 22]);
+  mapCtx.strokeStyle = 'rgba(255,220,120,0.85)';
+  mapCtx.lineWidth = 4;
+  mapCtx.stroke();
+  mapCtx.setLineDash([]);
+
+  // sidewalks
+  mapCtx.strokeStyle = '#8f96a3';
+  mapCtx.lineWidth = 54;
+  mapCtx.globalCompositeOperation = 'destination-over';
+  mapCtx.beginPath();
+  samples.forEach((p, i) => {
+    const [x, y] = pointToUV(p);
+    if (i === 0) mapCtx.moveTo(x, y); else mapCtx.lineTo(x, y);
+  });
+  mapCtx.closePath();
+  mapCtx.stroke();
+  mapCtx.globalCompositeOperation = 'source-over';
+})();
+
+const mapTexture = new THREE.CanvasTexture(mapCanvas);
+mapTexture.colorSpace = THREE.SRGBColorSpace;
+mapTexture.anisotropy = 8;
+
+const groundGeo = new THREE.PlaneGeometry(MAP_SIZE, MAP_SIZE, 1, 1);
+const groundMat = new THREE.MeshStandardMaterial({ map: mapTexture, roughness: 0.95 });
+const ground = new THREE.Mesh(groundGeo, groundMat);
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+// simple 3D buildings scattered to match footprints (visual context, not physically synced)
+const buildingGeo = new THREE.BoxGeometry(1, 1, 1);
+const buildingMat = new THREE.MeshStandardMaterial({ color: 0x8891a1, roughness: 0.8 });
+const buildingGroup = new THREE.InstancedMesh(buildingGeo, buildingMat, 40);
+buildingGroup.castShadow = true;
+buildingGroup.receiveShadow = true;
+{
+  const dummy = new THREE.Object3D();
+  let count = 0;
+  for (let i = 0; i < 60 && count < 40; i++) {
+    const x = (Math.random() - 0.5) * (MAP_SIZE - 40);
+    const z = (Math.random() - 0.5) * (MAP_SIZE - 40);
+    const p = new THREE.Vector3(x, 0, z);
+    // skip if too close to the road curve
+    let minDist = Infinity;
+    routeCurve.getPoints(120).forEach(rp => {
+      const d = Math.hypot(rp.x - x, rp.z - z);
+      if (d < minDist) minDist = d;
+    });
+    if (minDist < 16) continue;
+    const w = 6 + Math.random() * 10;
+    const h = 6 + Math.random() * 26;
+    const d = 6 + Math.random() * 10;
+    dummy.position.set(x, h / 2, z);
+    dummy.scale.set(w, h, d);
+    dummy.rotation.y = Math.random() * Math.PI;
+    dummy.updateMatrix();
+    buildingGroup.setMatrixAt(count, dummy.matrix);
+    count++;
+  }
+  buildingGroup.count = count;
+}
+scene.add(buildingGroup);
+
+// trees
+const treeTrunkMat = new THREE.MeshStandardMaterial({ color: 0x6b4226 });
+const treeTopMat = new THREE.MeshStandardMaterial({ color: 0x2f6b34 });
+const treeGroup = new THREE.Group();
+for (let i = 0; i < 70; i++) {
+  const x = (Math.random() - 0.5) * (MAP_SIZE - 20);
+  const z = (Math.random() - 0.5) * (MAP_SIZE - 20);
+  let minDist = Infinity;
+  routeCurve.getPoints(100).forEach(rp => {
+    const d = Math.hypot(rp.x - x, rp.z - z);
+    if (d < minDist) minDist = d;
+  });
+  if (minDist < 12) continue;
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.4, 2.4, 6), treeTrunkMat);
+  const top = new THREE.Mesh(new THREE.ConeGeometry(1.8, 4, 7), treeTopMat);
+  trunk.position.set(x, 1.2, z);
+  top.position.set(x, 4.2, z);
+  trunk.castShadow = top.castShadow = true;
+  treeGroup.add(trunk, top);
+}
+scene.add(treeGroup);
+
+// route line (toggleable helper, floats slightly above road)
+const routeLinePts = routeCurve.getPoints(300).map(p => new THREE.Vector3(p.x, 0.3, p.z));
+const routeLineGeo = new THREE.BufferGeometry().setFromPoints(routeLinePts);
+const routeLine = new THREE.Line(routeLineGeo, new THREE.LineBasicMaterial({ color: 0xffe066 }));
+scene.add(routeLine);
+
+// ---------- Procedural low-poly bus (purple livery like the photo) ----------
+function buildBus() {
+  const bus = new THREE.Group();
+
+  const purple = new THREE.MeshStandardMaterial({ color: 0x5b2a8c, roughness: 0.35, metalness: 0.35 });
+  const purpleDark = new THREE.MeshStandardMaterial({ color: 0x3a1a5e, roughness: 0.4, metalness: 0.3 });
+  const orange = new THREE.MeshStandardMaterial({ color: 0xff7a1a, roughness: 0.4, metalness: 0.1, emissive: 0x552200, emissiveIntensity: 0.15 });
+  const glass = new THREE.MeshPhysicalMaterial({ color: 0x1a2430, roughness: 0.05, metalness: 0.1, transmission: 0.55, transparent: true, opacity: 0.9, envMapIntensity: 1.2 });
+  const white = new THREE.MeshStandardMaterial({ color: 0xf3f3f3, roughness: 0.5 });
+  const tireMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.9 });
+  const rimMat = new THREE.MeshStandardMaterial({ color: 0xcfcfcf, roughness: 0.3, metalness: 0.7 });
+  const lightMat = new THREE.MeshStandardMaterial({ color: 0xfff6d5, emissive: 0xfff6d5, emissiveIntensity: 1.4 });
+  const tailMat = new THREE.MeshStandardMaterial({ color: 0xbb1122, emissive: 0x660011, emissiveIntensity: 0.7 });
+
+  const BODY_L = 9.5, BODY_W = 2.5, BODY_H = 2.6, GROUND_CLEARANCE = 0.55;
+
+  // main body (rounded box via slightly beveled group of boxes)
+  const bodyGeo = new THREE.BoxGeometry(BODY_L, BODY_H, BODY_W, 6, 4, 2);
+  const body = new THREE.Mesh(bodyGeo, purple);
+  body.position.y = GROUND_CLEARANCE + BODY_H / 2;
+  body.castShadow = true;
+  bus.add(body);
+
+  // lower skirt (dark)
+  const skirt = new THREE.Mesh(new THREE.BoxGeometry(BODY_L * 0.99, 0.5, BODY_W * 1.01), purpleDark);
+  skirt.position.y = GROUND_CLEARANCE + 0.28;
+  bus.add(skirt);
+
+  // roof curve (rounded top using a scaled cylinder half)
+  const roofGeo = new THREE.CylinderGeometry(BODY_W / 2, BODY_W / 2, BODY_L, 16, 1, false, 0, Math.PI);
+  const roof = new THREE.Mesh(roofGeo, purple);
+  roof.rotation.z = Math.PI / 2;
+  roof.rotation.y = Math.PI / 2;
+  roof.scale.set(1, 0.42, 1);
+  roof.position.y = GROUND_CLEARANCE + BODY_H;
+  roof.castShadow = true;
+  bus.add(roof);
+
+  // roof A/C unit
+  const ac = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.4, 1.6), white);
+  ac.position.set(-1, GROUND_CLEARANCE + BODY_H + 0.55, 0);
+  bus.add(ac);
+
+  // windshield (angled front glass)
+  const windshield = new THREE.Mesh(new THREE.BoxGeometry(0.15, 1.5, BODY_W * 0.92), glass);
+  windshield.position.set(BODY_L / 2 - 0.35, GROUND_CLEARANCE + BODY_H * 0.62, 0);
+  windshield.rotation.z = 0.15;
+  bus.add(windshield);
+
+  // side window strip
+  const windowStrip = new THREE.Mesh(new THREE.BoxGeometry(BODY_L * 0.82, 0.95, 0.08), glass);
+  windowStrip.position.set(-0.3, GROUND_CLEARANCE + BODY_H * 0.72, BODY_W / 2 + 0.02);
+  bus.add(windowStrip);
+  const windowStrip2 = windowStrip.clone();
+  windowStrip2.position.z = -(BODY_W / 2 + 0.02);
+  bus.add(windowStrip2);
+
+  // window mullions (thin dark bars breaking up the glass strip visually)
+  for (let i = -3; i <= 3; i++) {
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.0, BODY_W + 0.06), purpleDark);
+    bar.position.set(i * 1.15, GROUND_CLEARANCE + BODY_H * 0.72, 0);
+    bus.add(bar);
+  }
+
+  // headlights
+  [1, -1].forEach(side => {
+    const hl = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 12), lightMat);
+    hl.position.set(BODY_L / 2 - 0.05, GROUND_CLEARANCE + 0.75, side * (BODY_W / 2 - 0.35));
+    bus.add(hl);
+  });
+  // taillights
+  [1, -1].forEach(side => {
+    const tl = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.35, 0.5), tailMat);
+    tl.position.set(-BODY_L / 2 + 0.05, GROUND_CLEARANCE + 1.1, side * (BODY_W / 2 - 0.3));
+    bus.add(tl);
+  });
+
+  // orange decorative side flourish (like the livery swoosh)
+  const flourish = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.5, 0.06), orange);
+  flourish.position.set(BODY_L / 2 - 1.9, GROUND_CLEARANCE + 0.95, BODY_W / 2 + 0.03);
+  flourish.rotation.z = -0.12;
+  bus.add(flourish);
+  const flourish2 = flourish.clone();
+  flourish2.position.z = -(BODY_W / 2 + 0.03);
+  bus.add(flourish2);
+
+  // wheels
+  function wheel(x, z) {
+    const g = new THREE.Group();
+    const tire = new THREE.Mesh(new THREE.CylinderGeometry(0.48, 0.48, 0.35, 20), tireMat);
+    tire.rotation.z = Math.PI / 2;
+    const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 0.36, 12), rimMat);
+    rim.rotation.z = Math.PI / 2;
+    g.add(tire, rim);
+    g.position.set(x, 0.5, z);
+    g.castShadow = true;
+    return g;
+  }
+  const wheelSide = BODY_W / 2 + 0.05;
+  bus.add(wheel(BODY_L / 2 - 1.6, wheelSide));
+  bus.add(wheel(BODY_L / 2 - 1.6, -wheelSide));
+  bus.add(wheel(-BODY_L / 2 + 1.6, wheelSide));
+  bus.add(wheel(-BODY_L / 2 + 1.6, -wheelSide));
+
+  // side mirrors
+  [1, -1].forEach(side => {
+    const mirror = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.3, 0.08), purpleDark);
+    mirror.position.set(BODY_L / 2 - 0.1, GROUND_CLEARANCE + BODY_H * 0.75, side * (BODY_W / 2 + 0.3));
+    bus.add(mirror);
+  });
+
+  bus.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  return bus;
+}
+const bus = buildBus();
+scene.add(bus);
+
+// bus "up" offset for chassis height already baked into geometry; group origin sits at road level (y=0)
+
+// ---------- Route following state ----------
+const state = {
+  playing: true,
+  t: 0,           // 0..1 progress along curve
+  speedKmh: 28,
+  camMode: 'follow',
+};
+
+const ROUTE_LENGTH_M = routeCurve.getLength(); // approx meters for this closed loop
+
+function updateBusTransform() {
+  const pos = routeCurve.getPointAt(state.t);
+  const tangent = routeCurve.getTangentAt(state.t).normalize();
+  bus.position.set(pos.x, pos.y, pos.z);
+
+  const heading = Math.atan2(tangent.x, tangent.z);
+  // slight banking into turns based on curvature estimate
+  const tNext = routeCurve.getTangentAt((state.t + 0.002) % 1).normalize();
+  const turnAmount = tangent.clone().sub(tNext).length() * 6;
+  bus.rotation.set(0, heading + Math.PI / 2, 0);
+  bus.rotation.z = THREE.MathUtils.clamp(turnAmount, -0.12, 0.12) * (tangent.x * tNext.z - tangent.z * tNext.x > 0 ? 1 : -1);
+
+  document.getElementById('headingVal').textContent = Math.round(((heading * 180 / Math.PI) + 360) % 360);
+  document.getElementById('progressVal').textContent = Math.round(state.t * 100);
+}
+updateBusTransform();
+
+// ---------- Camera rigs ----------
+const chaseOffset = new THREE.Vector3(0, 5.5, -12);
+const onboardOffset = new THREE.Vector3(1.2, 3.0, 0.7);
+
+function updateCamera(dt) {
+  if (state.camMode === 'orbit') {
+    controls.enabled = true;
+    controls.target.lerp(bus.position, 0.08);
+    controls.update();
+    return;
+  }
+  controls.enabled = false;
+
+  if (state.camMode === 'top') {
+    const target = new THREE.Vector3(bus.position.x, 0, bus.position.z);
+    const desired = new THREE.Vector3(bus.position.x, 90, bus.position.z + 0.001);
+    camera.position.lerp(desired, 0.06);
+    camera.up.set(0, 0, -1);
+    camera.lookAt(target);
+    camera.up.set(0, 1, 0);
+    return;
+  }
+
+  if (state.camMode === 'onboard') {
+    const worldOffset = onboardOffset.clone().applyQuaternion(bus.quaternion);
+    const desiredPos = bus.position.clone().add(worldOffset);
+    camera.position.lerp(desiredPos, 0.35);
+    const lookAt = bus.position.clone().add(
+      new THREE.Vector3(6, 2.6, 0).applyQuaternion(bus.quaternion)
+    );
+    camera.lookAt(lookAt);
+    return;
+  }
+
+  // follow / chase cam (default)
+  const worldOffset = chaseOffset.clone().applyQuaternion(bus.quaternion);
+  const desiredPos = bus.position.clone().add(worldOffset);
+  camera.position.lerp(desiredPos, 1 - Math.pow(0.001, dt));
+  const lookAt = bus.position.clone().add(new THREE.Vector3(0, 2, 0));
+  camera.lookAt(lookAt);
+}
+
+// ---------- UI wiring ----------
+const playBtn = document.getElementById('playBtn');
+const speedSlider = document.getElementById('speedSlider');
+const speedVal = document.getElementById('speedVal');
+const camModeSel = document.getElementById('camMode');
+const showRouteChk = document.getElementById('showRoute');
+
+playBtn.addEventListener('click', () => {
+  state.playing = !state.playing;
+  playBtn.textContent = state.playing ? 'Pause' : 'Play';
+});
+speedSlider.addEventListener('input', e => {
+  state.speedKmh = Number(e.target.value);
+  speedVal.textContent = state.speedKmh;
+});
+camModeSel.addEventListener('change', e => { state.camMode = e.target.value; });
+showRouteChk.addEventListener('change', e => { routeLine.visible = e.target.checked; });
+
+// ---------- Resize ----------
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// ---------- Animation loop ----------
+const clock = new THREE.Clock();
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.05);
+
+  if (state.playing) {
+    const speedMs = state.speedKmh / 3.6;
+    const dtParam = speedMs * dt / ROUTE_LENGTH_M;
+    state.t = (state.t + dtParam) % 1;
+    updateBusTransform();
+
+    // wheel spin illusion via slight body bob (cheap, avoids per-wheel refs)
+  }
+
+  updateCamera(dt);
+  renderer.render(scene, camera);
+}
+
+loadingEl.style.display = 'none';
+animate();
+</script>
+</body>
+</html>
